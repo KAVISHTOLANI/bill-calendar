@@ -1,12 +1,401 @@
-import {useEffect,useMemo,useState} from 'react';import {uid,toMarkdown,csv} from './logic';import './styles.css';
-const cfg={"slug":"bill-calendar","name":"Dueboard","purpose":"Recurring bill planner with due dates, paid status, categories, and monthly totals.","kind":"bill","fields":["Bill","category","amount","due date","frequency"],"accent":"red"} as const;const pages=[['home','Home'],['workspace','Bills'],['guide','Calendar'],['examples','Monthly totals'],['reference','Payment guide'],['help','Help']] as const;type Page=typeof pages[number][0];type Item={id:string;title:string;createdAt:string;[key:string]:string};const key='local-portfolio:'+cfg.slug;const makeDemo=():Item[]=>['Field note — Alder','Follow-up — Miro','Review — Sol','Plan — Juniper','Archive — Nia','Decision — Rowan','Reminder — Theo','Research — Imani','Checklist — Ellis','Exception — Saffron'].map((title,i)=>({id:'demo-'+i,title,createdAt:new Date(Date.now()-i*86400000).toISOString(),[cfg.fields[1]]:['In focus','Scheduled','Reviewed','Waiting','Reference'][i%5],[cfg.fields[2]]:['Ready','Needs review','Complete','Paused','Archived'][i%5],[cfg.fields[3]]:new Date(Date.now()+(i-3)*86400000).toISOString().slice(0,10),[cfg.fields[4]]:i===4?'A longer fictional note showing a realistic exception, the decision taken, and what should be checked before the record is used again.':'Fictional demo data for a populated local workspace.'}));function download(n:string,s:string,t='text/plain'){const x=document.createElement('a');x.href=URL.createObjectURL(new Blob([s],{type:t}));x.download=n;x.click();URL.revokeObjectURL(x.href)}
-export default function App(){const requested=location.hash.slice(1);const [page,setPage]=useState<Page|'notfound'>(()=>pages.some(([id])=>id===requested)?requested as Page:requested?'notfound':'home');const [records,setRecords]=useState<Item[]>(()=>{try{return JSON.parse(localStorage.getItem(key)||'null')||makeDemo()}catch{return makeDemo()}});const [form,setForm]=useState<Record<string,string>>({});const [query,setQuery]=useState('');const [notice,setNotice]=useState('');const [answer,setAnswer]=useState('');const [editing,setEditing]=useState<Item|null>(null);useEffect(()=>{document.title=(page==='home'?cfg.name:page==='notfound'?'Page not found':cfg.name+' — '+page);if(page!=='notfound')location.hash=page},[page]);const save=(x:Item[])=>{setRecords(x);localStorage.setItem(key,JSON.stringify(x))};const filtered=useMemo(()=>records.filter(r=>JSON.stringify(r).toLowerCase().includes(query.toLowerCase())),[records,query]);const add=(ev:React.FormEvent)=>{ev.preventDefault();const title=form[cfg.fields[0]]?.trim();if(!title){setNotice('Add a '+cfg.fields[0].toLowerCase()+' before saving.');return}const next={id:editing?.id||uid(),title,createdAt:editing?.createdAt||new Date().toISOString()} as Item;cfg.fields.forEach(f=>next[f]=form[f]||'');save(editing?records.map(r=>r.id===editing.id?next:r):[next,...records]);setForm({});setEditing(null);setNotice(editing?'Record updated locally.':'Saved locally. You can now find it in the archive or export it.')};const importJson=async(file?:File)=>{if(!file)return;try{const parsed=JSON.parse(await file.text());if(!Array.isArray(parsed)||!parsed.every(x=>x&&typeof x.title==='string'))throw new Error();save(parsed);setNotice('Imported '+parsed.length+' records into this browser.')}catch{setNotice('That file is not a valid export. Your existing records were left unchanged.')}};return <div className={'app '+cfg.accent}><div className="shell"><header><div className="brand"><small>LOCAL EDITION</small>{cfg.name}</div><nav aria-label="Primary">{pages.map(([id,label])=><button className={page===id?'active':''} key={id} onClick={()=>setPage(id)}>{label}</button>)}</nav></header>{page==='home'&&<Home records={records} open={()=>setPage('workspace')}/>} {page==='workspace'&&<Workspace/>}{page==='notfound'&&<NotFound/>}{page==='guide'&&<Guide title="Calendar"/>}{page==='examples'&&<Examples/>}{page==='reference'&&<Reference/>}{page==='help'&&<Help/>}</div></div>;
-function Home({records,open}:{records:Item[];open:()=>void}){return <><section className="hero"><div><p className="eyebrow">A CLEARER WAY TO WORK LOCALLY</p><h1>Dueboard keeps the important details <i>findable.</i></h1><p>Recurring due dates are less stressful when they are visible before they become urgent.</p><div className="actions"><button className="primary" onClick={open}>Open bills</button><button onClick={()=>download(cfg.slug+'-demo.md',toMarkdown(cfg.name,records))}>Export demo</button></div></div><aside className="preview"><div className="preview-head">LIVE SAMPLE <span>● DEMO DATA</span></div><div className="preview-title">What is ready today</div>{records.slice(0,3).map((r,i)=><div className="peek" key={r.id}><div><b>{r.title}</b><br/><small>{r[cfg.fields[1]]}</small></div><span>{i===0?'NOW':'SAVED'}</span></div>)}<div className="preview-foot">No account. No sync. Export when you choose.</div></aside></section><section className="section"><p className="eyebrow">01 / FIRST RECORD</p><h2>Begin with a record you will need again.</h2><p>Add each bill once, set its cycle and due date, then mark it paid when the cycle closes.</p><div className="card-grid"><div className="info-card"><strong>1. Name the detail</strong><p>Use the first field for the thing you will search for later, rather than a vague catch-all.</p></div><div className="info-card"><strong>2. Add context</strong><p>Record the practical facts beside it: status, timing, and the note that explains the decision.</p></div><div className="info-card"><strong>3. Review deliberately</strong><p>Search your local history, export when needed, and remove data that is no longer useful.</p></div></div></section><section className="section story"><p className="eyebrow">02 / WHY THIS RECORD EXISTS</p><h2>Small details are where useful decisions begin.</h2><p>{cfg.purpose} This is deliberately a local record rather than a social feed, an account portal, or an automated recommendation. It gives you a calm place to capture the exact fact, its context, and the practical next question while you still remember why it matters.</p><p>Every entry is searchable by the words you wrote. Use concise fields for things you expect to compare later, then use the note for nuance: an exception, an uncertainty, or the reason a future version of you should pause before acting.</p></section><section className="section"><p className="eyebrow">03 / THE CURRENT DESK</p><h2>Ten examples, clearly fictional.</h2><p>The first records are labelled demo data. They exist to demonstrate active, scheduled, reviewed, and archived states—never to imply real people, transactions, outcomes, or activity.</p><div className="card-grid">{records.slice(0,6).map((r,i)=><div className="info-card" key={r.id}><strong>{String(i+1).padStart(2,'0')} · {r.title}</strong><p>{r[cfg.fields[1]]} · {r[cfg.fields[2]]}<br/>{r[cfg.fields[4]]}</p></div>)}</div></section><section className="section"><p className="eyebrow">04 / A PRACTICAL LOOP</p><h2>Capture. Review. Carry forward.</h2><div className="card-grid"><div className="info-card"><strong>Capture</strong><p>Open the workspace when the detail is fresh. The required title prevents a record that cannot be found later.</p></div><div className="info-card"><strong>Review</strong><p>Search by a name, category, status, or note. Empty results are an invitation to change the query, not a dead end.</p></div><div className="info-card"><strong>Carry forward</strong><p>Export a Markdown or CSV copy before a handoff, a planning session, or a browser reset. Local data is yours to move.</p></div></div></section><section className="section"><p className="eyebrow">05 / WHAT THE TOOL DOES NOT DO</p><h2>Clear boundaries are part of the design.</h2><p>This app does not silently synchronize, infer facts, send reminders, or make a recommendation for you. Dates, labels, financial figures, health-related notes, disposal guidance, and any decisions based on them depend entirely on the information you enter and the context you verify.</p></section><section className="section"><p className="eyebrow">06 / KEEP A PORTABLE COPY</p><h2>Local-first should never mean trapped.</h2><p>Use JSON import and export for a browser-local backup, or CSV and Markdown when you need a readable copy. Imported JSON replaces the current local collection only after the file is successfully parsed; malformed files leave the saved records unchanged and show a clear error.</p></section><section className="section"><p className="eyebrow">07 / CONTINUE IN THE TOOL</p><h2>Use the real workspace, not a mock-up.</h2><p>The preview above is built from the same saved records used in the workspace. Open it to add, edit, remove, filter, import, and export local data.</p><div className="actions"><button className="primary" onClick={open}>Open workspace</button></div></section><footer className="section footer"><p className="eyebrow">08 / LOCAL PROJECT NOTES</p><p>This product stores its data in the active browser profile. Read the guide and limitations before relying on it for a consequential decision.</p></footer></>}
-function Workspace(){return <section className="workspace"><div className="toolbar"><input aria-label="Search records" value={query} onChange={e=>setQuery(e.target.value)} placeholder={'Search '+cfg.name}/><button onClick={()=>download(cfg.slug+'.md',toMarkdown(cfg.name,records))}>Export Markdown</button><button onClick={()=>download(cfg.slug+'.csv',csv(records),'text/csv')}>Export CSV</button><button onClick={()=>download(cfg.slug+'.json',JSON.stringify(records,null,2),'application/json')}>Export JSON</button><label className="import">Import JSON<input type="file" accept="application/json" onChange={e=>importJson(e.target.files?.[0])}/></label></div><div className="grid"><form onSubmit={add}><h2>Add bill</h2>{cfg.fields.map((f,i)=><label key={f}>{f}<input required={i===0} value={form[f]||''} onChange={e=>setForm({...form,[f]:e.target.value})} placeholder={'Enter '+f.toLowerCase()}/></label>)}<button className="primary">{editing?'Save changes':'Save record'}</button>{editing&&<button type="button" onClick={()=>{setEditing(null);setForm({})}}>Cancel edit</button>}{notice&&<p className="notice" role="status">{notice}</p>}</form><article className="records"><h2>{filtered.length} records</h2>{filtered.length===0?<p className="empty">No records match that search. Clear the search or create the first local record.</p>:filtered.map(r=><section className="card" key={r.id}><div><h3>{r.title}</h3>{cfg.fields.slice(1).map(f=><p key={f}><b>{f}</b> {r[f]||'—'}</p>)}</div><div><button onClick={()=>{setEditing(r);const values:Record<string,string>={};cfg.fields.forEach(f=>values[f]=r[f]||'');setForm(values);window.scrollTo({top:0,behavior:'smooth'})}}>Edit</button><button onClick={()=>{save(records.filter(x=>x.id!==r.id));setNotice('Record removed from this browser.')}}>Delete</button></div></section>)}</article></div><Special/></section>}
-function NotFound(){return <section className="section"><p className="eyebrow">404 / LOCAL ROUTE</p><h2>That page is not in this edition.</h2><p>Use the navigation to return to a known section.</p><button className="primary" onClick={()=>setPage('home')}>Return home</button></section>}
-function Guide({title}:{title:string}){return <Content kicker="02 / FIELD GUIDE" title={title} body="recurrence, due date, paid status, cycle are the working vocabulary in this tool. The guide does not prescribe a single right process; it explains what each field records, why it is there, and how to keep the record useful over time." cards={[['Use plain language','Write the term that a future version of you will recognise quickly.'],['Keep dates practical','Use a date only when it helps you decide what to do or review next.'],['Separate facts from notes','Use short fields for filtering and the note for the detail that does not fit a label.']]}/>}
-function Examples(){return <Content kicker="03 / WORKED EXAMPLES" title="A record with enough context." body="The sample records are fictional and labelled as demo data. They show the difference between a title that can be found, structured fields that can be scanned, and a note that preserves the reason behind a decision." cards={[['A current item','Marked In focus, with a near date and a concise note.'],['A scheduled item','Has a future date so it appears when you are planning ahead.'],['An edge case','Uses a longer note to prove that more context remains readable.']]}/>}
-function Reference(){return <Content kicker="04 / METHOD" title="How this local tool handles information." body="Dueboard stores records in this browser using localStorage. Search runs against the saved local data. Markdown and CSV exports are created in your browser. There is no account, server synchronization, automatic backup, or claim that this record is authoritative outside the information you enter." cards={[['Local first','Your records remain in the active browser profile until you export or remove them.'],['Simple exports','Exports are designed to be readable and portable, not a full database backup format.'],['Human review','Dates, amounts, labels, and reminders depend on the data you enter and should be checked before acting.']]}/>}
-function Help(){return <section className="section"><p className="eyebrow">05 / HELP & LIMITS</p><h2>Useful boundaries make a tool more trustworthy.</h2><div className="faq"><details open><summary>Where is my data stored?</summary><p>In localStorage for this browser profile. Clearing browser data may remove it; use an export for a copy you control.</p></details><details><summary>Is the demo data real?</summary><p>No. It is fictional sample material designed to show populated, long-text, status, and archive states.</p></details><details><summary>What happens when a form is incomplete?</summary><p>The first field is required. The form gives a plain-language message and keeps the entered values available to correct.</p></details><details><summary>Can this replace specialist advice?</summary><p>No. It is a personal organization aid. The limitations and relevant disclaimers should guide how you use the records.</p></details></div></section>}
-function Content({kicker,title,body,cards}:{kicker:string;title:string;body:string;cards:string[][]}){return <section className="section"><p className="eyebrow">{kicker}</p><h2>{title}</h2><p>{body}</p><div className="card-grid">{cards.map(c=><div className="info-card" key={c[0]}><strong>{c[0]}</strong><p>{c[1]}</p></div>)}</div></section>}
-function Special(){if((cfg.kind as string)==='algorithm')return <section className="lab"><h2>Visible operations</h2><p>Use these controls to see an ordered set change. They are deliberately small: the explanation matters more than spectacle.</p><button onClick={()=>setAnswer('Values sorted: 4, 7, 12, 19')}>Sort sample</button><button onClick={()=>setAnswer('One comparison explained: 12 is greater than 7, so it moves after 7.')}>Explain step</button><p role="status">{answer}</p></section>;if((cfg.kind as string)==='garden')return <section className="lab"><h2>Bed grid</h2><div className="bed">{Array.from({length:12},(_,i)=><button key={i} onClick={()=>setAnswer('Plant marker placed in bed cell '+(i+1))}>{answer.includes(String(i+1))?'●':'+'}</button>)}</div><p role="status">{answer||'Select a cell to place a marker.'}</p></section>;return <section className="lab"><h2>Practice note</h2><p>Use this local workspace with the guide alongside it. A good record is specific enough to help later and short enough to keep current.</p></section>}}
+import { useState, type ReactNode } from 'react';
+import { DemoTag, EmptyState, Field, Landing, NotFound, Notice, PageHead, Shell, uid, useFlash, usePersistentState, useRoute } from './shared/ui';
+import { DataTable, useTable, type Column } from './shared/table';
+import { addDays, addMonths, daysBetween, formatDay, fromISO, relativeDays, todayISO } from './shared/dates';
+import {
+  CATEGORIES,
+  annualCost,
+  monthGrid,
+  monthRange,
+  monthSummary,
+  repeatLabel,
+  round,
+  schedule,
+  validateBill,
+  type Bill,
+  type BillDraft,
+  type Category,
+  type Occurrence,
+  type Payment,
+} from './lib/bills';
+
+const KEY = 'dueboard:store';
+const NAV = [
+  { to: '/', label: 'Overview' },
+  { to: '/calendar', label: 'Calendar' },
+  { to: '/bills', label: 'Bills' },
+  { to: '/year', label: 'Year ahead' },
+];
+const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const STATUS_LABEL = { paid: 'Paid', overdue: 'Overdue', 'due-soon': 'Due soon', upcoming: 'Upcoming', autopay: 'Autopay' } as const;
+const money = (n: number) => n.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const ymOf = (d: string) => d.slice(0, 7);
+const monthName = (ym: string, opts: Intl.DateTimeFormatOptions = { month: 'long', year: 'numeric' }) => fromISO(`${ym}-01`).toLocaleDateString(undefined, opts);
+
+interface Store {
+  bills: Bill[];
+  payments: Payment[];
+}
+
+export function demoStore(today: string): Store {
+  const ym = ymOf(today);
+  const start = addMonths(`${ym}-01`, -3).slice(0, 7);
+  const b = (id: string, name: string, payee: string, category: Category, amount: number, repeat: Bill['repeat'], extra: Partial<Bill> = {}): Bill => ({ id: `demo-${id}`, name, payee, category, amount, repeat, variable: false, autopay: false, active: true, demo: true, ...extra });
+  const bills: Bill[] = [
+    b('rent', 'Rent', 'Demo Lettings', 'Housing', 1150, { kind: 'monthly', day: 1, everyMonths: 1, startMonth: start }),
+    b('power', 'Electricity', 'Demo Energy', 'Utilities', 85, { kind: 'monthly', day: 12, everyMonths: 1, startMonth: start }, { variable: true }),
+    b('water', 'Water and sewer (quarterly, estimated from last bill)', 'Demo Water Board', 'Utilities', 96, { kind: 'monthly', day: 20, everyMonths: 3, startMonth: start }, { variable: true }),
+    b('net', 'Home internet', 'Demo Fibre', 'Phone & internet', 45, { kind: 'monthly', day: 18, everyMonths: 1, startMonth: start }, { autopay: true }),
+    b('phone', 'Mobile phone', 'Demo Mobile', 'Phone & internet', 25, { kind: 'monthly', day: 27, everyMonths: 1, startMonth: start }, { autopay: true }),
+    b('stream', 'Video streaming', 'Demo Streams', 'Subscriptions', 11.99, { kind: 'monthly', day: 9, everyMonths: 1, startMonth: start }, { autopay: true }),
+    b('gym', 'Gym membership', 'Demo Fitness', 'Subscriptions', 19.5, { kind: 'weekly', everyWeeks: 2, start: addDays(today, -40) }, { autopay: true }),
+    b('car', 'Car insurance', 'Demo Insure', 'Insurance', 640, { kind: 'yearly', month: Number(addMonths(today, 1).slice(5, 7)), day: 5 }),
+    b('loan', 'Student loan', 'Demo Loans', 'Loans', 180, { kind: 'monthly', day: 28, everyMonths: 1, startMonth: start }),
+    b('council', 'Council tax', 'Demo Council', 'Housing', 132, { kind: 'monthly', day: 15, everyMonths: 1, startMonth: start }),
+  ];
+  const payments: Payment[] = [];
+  const past = schedule(bills, [], `${start}-01`, addDays(today, -1), today);
+  for (const o of past) {
+    if (o.bill.autopay) continue;
+    if (o.bill.id === 'demo-council' && ymOf(o.due) === ym) continue; // left overdue on purpose
+    const amt = o.bill.variable ? round(o.bill.amount * (0.85 + ((o.due.charCodeAt(6) + o.due.charCodeAt(9)) % 30) / 100)) : o.bill.amount;
+    payments.push({ billId: o.bill.id, due: o.due, paidOn: addDays(o.due, -1), amount: amt });
+  }
+  return { bills, payments };
+}
+
+export default function App() {
+  const [route, navigate] = useRoute();
+  const today = todayISO();
+  const [store, setStore] = usePersistentState<Store>(KEY, () => demoStore(today));
+  const ctx = { store, setStore, today, navigate };
+  const edit = route.match(/^\/bill\/(.+)$/);
+  let page: ReactNode;
+  if (route === '/') page = <Home />;
+  else if (route === '/calendar') page = <Calendar {...ctx} />;
+  else if (route === '/bills') page = <Bills {...ctx} />;
+  else if (edit) page = <Editor {...ctx} id={edit[1] === 'new' ? undefined : edit[1]} />;
+  else if (route === '/year') page = <Year {...ctx} />;
+  else page = <NotFound />;
+  return (
+    <Shell name="Dueboard" wordmark={['Due', 'board']} nav={NAV} route={route} cta={{ to: '/calendar', label: 'This month' }} footerNote="Dueboard is a planner. It doesn’t pay bills or connect to your bank.">
+      {page}
+    </Shell>
+  );
+}
+
+type Ctx = { store: Store; setStore: (s: Store) => void; today: string; navigate: (to: string) => void };
+
+function MonthGrid({ ym, occ, today, selected, onSelect, compact }: { ym: string; occ: Occurrence[]; today: string; selected?: string; onSelect?: (d: string) => void; compact?: boolean }) {
+  return (
+    <div className={`cal ${compact ? 'is-compact' : ''}`} role="grid" aria-label={`Bills in ${monthName(ym)}`}>
+      <div role="row" className="cal-row cal-head">{DOW.map((d) => <span role="columnheader" key={d}>{compact ? d[0] : d}</span>)}</div>
+      {monthGrid(ym).map((week, w) => (
+        <div role="row" className="cal-row" key={w}>
+          {week.map((d, i) => {
+            if (!d) return <span role="gridcell" key={i} className="cal-cell is-pad" />;
+            const items = occ.filter((o) => o.due === d);
+            const total = round(items.reduce((s, o) => s + o.amount, 0));
+            const worst = items.some((o) => o.status === 'overdue') ? 'overdue' : items.some((o) => o.status === 'due-soon') ? 'due-soon' : items.length && items.every((o) => o.status === 'paid') ? 'paid' : items.length ? 'upcoming' : '';
+            const label = `${formatDay(d, { weekday: 'long', day: 'numeric', month: 'long' })}: ${items.length ? `${items.length} bill${items.length > 1 ? 's' : ''}, ${money(total)}` : 'no bills'}`;
+            const content = (
+              <>
+                <span className="cal-day">{Number(d.slice(8))}</span>
+                {items.length > 0 && (compact
+                  ? <span className={`cal-dot s-${worst}`} />
+                  : <span className="cal-items">{items.slice(0, 2).map((o) => <span key={o.bill.id} className={`cal-chip s-${o.status}`}>{o.bill.name}</span>)}{items.length > 2 && <span className="small muted">+{items.length - 2}</span>}</span>)}
+              </>
+            );
+            return (
+              <span role="gridcell" key={d} className={`cal-cell ${d === today ? 'is-today' : ''} ${selected === d ? 'is-selected' : ''}`} aria-selected={selected === d || undefined}>
+                {onSelect ? <button type="button" className="cal-btn" aria-label={label} onClick={() => onSelect(d)}>{content}</button> : <span className="cal-btn" aria-label={label}>{content}</span>}
+              </span>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function HeroPreview() {
+  const today = todayISO();
+  const s = demoStore(today);
+  const { from, to } = monthRange(ymOf(today));
+  const occ = schedule(s.bills, s.payments, from, to, today);
+  const sum = monthSummary(occ);
+  return (
+    <div className="hero-db">
+      <div className="hero-db-sum">
+        <div><span>Due in {monthName(ymOf(today), { month: 'long' })}</span><b>{money(sum.total)}</b></div>
+        <div><span>Paid</span><b>{money(sum.paid)}</b></div>
+        <div><span>Left to pay</span><b>{money(sum.remaining)}</b></div>
+      </div>
+      <MonthGrid ym={ymOf(today)} occ={occ} today={today} compact />
+      <Legend />
+    </div>
+  );
+}
+
+function Legend() {
+  return <p className="legend"><span><i className="s-paid" />Paid</span><span><i className="s-due-soon" />Due within 7 days</span><span><i className="s-overdue" />Overdue</span><span><i className="s-upcoming" />Upcoming</span></p>;
+}
+
+function Home() {
+  return (
+    <Landing
+      eyebrow="Bill calendar"
+      title={<>Every bill, <em>on the day it’s due.</em></>}
+      lead="Add your recurring bills once — monthly, quarterly, every other week or yearly. Dueboard lays them out on a calendar, shows what’s left to pay this month, and flags anything overdue."
+      primary={{ href: '#/calendar', label: 'Open this month' }}
+      secondary={{ href: '#/year', label: 'See the year ahead' }}
+      previewLabel="This month — demo bills"
+      preview={<HeroPreview />}
+      steps={[
+        { title: 'Add a bill', body: 'Amount, category, how it repeats, and whether it’s on autopay or varies month to month.' },
+        { title: 'Check the month', body: 'The calendar shows each due date. Select a day to see the bills and mark them paid.' },
+        { title: 'Record what you paid', body: 'For variable bills, enter the real amount — totals update straight away.' },
+      ]}
+      stepsIntro="Dueboard opens with ten labelled demo bills and three months of payment history. Clear them when you’re ready."
+      features={[
+        { title: 'Awkward dates handled', body: 'A bill due on the 31st falls on the last day of shorter months; 29 February works in leap years.' },
+        { title: 'Autopay aware', body: 'Autopay bills count as paid once their date passes, so only manual bills can go overdue.' },
+        { title: 'Real totals', body: 'Paid, remaining and per-category totals for the month, using actual amounts once paid.' },
+        { title: 'The year ahead', body: 'What each bill costs per year and how much is due in each of the next 12 months.' },
+      ]}
+      note="Dueboard is a planner. It doesn’t move money or connect to your bank."
+      closing={{ title: <>Nothing due <em>by surprise.</em></>, action: { href: '#/bill/new', label: 'Add a bill' } }}
+    />
+  );
+}
+
+/* ---------- Calendar ---------- */
+function Calendar({ store, setStore, today }: Ctx) {
+  const [ym, setYm] = useState(ymOf(today));
+  const [sel, setSel] = useState<string | undefined>(undefined);
+  const [amounts, setAmounts] = useState<Record<string, string>>({});
+  const [flash, setFlash] = useFlash();
+  const { from, to } = monthRange(ym);
+  const occ = schedule(store.bills, store.payments, from, to, today);
+  const sum = monthSummary(occ);
+  if (store.bills.length === 0)
+    return <EmptyState title="No bills yet" actions={<><a className="btn btn-primary" href="#/bill/new">Add a bill</a><button type="button" className="btn" onClick={() => setStore(demoStore(today))}>Load demo bills</button></>}>Add the bills you pay regularly to see them on the calendar.</EmptyState>;
+  const list = sel ? occ.filter((o) => o.due === sel) : occ.filter((o) => o.status !== 'paid');
+  const key = (o: Occurrence) => `${o.bill.id}@${o.due}`;
+  function pay(o: Occurrence) {
+    const text = amounts[key(o)] ?? o.bill.amount.toFixed(2);
+    const n = Number(text);
+    if (!Number.isFinite(n) || n <= 0) return setFlash({ kind: 'error', text: `Enter the amount paid for ${o.bill.name}.` });
+    setStore({ ...store, payments: [...store.payments.filter((p) => !(p.billId === o.bill.id && p.due === o.due)), { billId: o.bill.id, due: o.due, paidOn: today, amount: round(n) }] });
+    setFlash({ kind: 'success', text: `${o.bill.name} marked paid (${money(n)}).` });
+  }
+  function unpay(o: Occurrence) {
+    setStore({ ...store, payments: store.payments.filter((p) => !(p.billId === o.bill.id && p.due === o.due)) });
+  }
+  return (
+    <div className="stack">
+      <PageHead eyebrow="Calendar" title={<>{monthName(ym, { month: 'long' })} <em>{ym.slice(0, 4)}</em></>}
+        actions={<div className="row nowrap">
+          <button type="button" className="btn btn-sm" aria-label="Previous month" onClick={() => { setYm(addMonths(`${ym}-01`, -1).slice(0, 7)); setSel(undefined); }}>←</button>
+          <button type="button" className="btn btn-sm" disabled={ym === ymOf(today)} onClick={() => { setYm(ymOf(today)); setSel(undefined); }}>Today</button>
+          <button type="button" className="btn btn-sm" aria-label="Next month" onClick={() => { setYm(addMonths(`${ym}-01`, 1).slice(0, 7)); setSel(undefined); }}>→</button>
+        </div>} />
+      {flash && <Notice kind={flash.kind} onDismiss={() => setFlash(null)}>{flash.text}</Notice>}
+      <div className="stats" data-testid="month-summary">
+        <div className="stat"><span className="stat-label">Due this month</span><span className="stat-value">{money(sum.total)}</span></div>
+        <div className="stat"><span className="stat-label">Paid</span><span className="stat-value">{money(sum.paid)}</span></div>
+        <div className="stat"><span className="stat-label">Left to pay</span><span className="stat-value">{money(sum.remaining)}</span></div>
+        <div className="stat"><span className="stat-label">Overdue</span><span className="stat-value">{sum.overdue}</span></div>
+      </div>
+      <div className="layout-main">
+        <section className="card stack" aria-label="Month calendar">
+          <MonthGrid ym={ym} occ={occ} today={today} selected={sel} onSelect={(d) => setSel(sel === d ? undefined : d)} />
+          <Legend />
+        </section>
+        <aside className="card stack" aria-labelledby="list-title">
+          <div className="card-title-row"><h2 id="list-title" className="h3">{sel ? formatDay(sel, { weekday: 'long', day: 'numeric', month: 'long' }) : 'Still to pay'}</h2>{sel && <button type="button" className="btn btn-sm btn-ghost" onClick={() => setSel(undefined)}>Show all</button>}</div>
+          {list.length === 0 ? <p className="muted">{sel ? 'No bills due this day.' : 'Everything this month is paid.'}</p> : (
+            <ul className="pay-list">
+              {list.map((o) => (
+                <li key={key(o)} className={`pay s-${o.status}-b`}>
+                  <div className="row-between"><strong>{o.bill.name}</strong><span className={`badge ${o.status === 'paid' ? 'badge-ok' : o.status === 'overdue' ? 'badge-err' : o.status === 'due-soon' ? 'badge-warn' : ''}`}>{STATUS_LABEL[o.status]}</span></div>
+                  <span className="small muted">{formatDay(o.due, { weekday: 'short', day: 'numeric', month: 'short' })} · {relativeDays(daysBetween(today, o.due))}{o.bill.variable && !o.payment ? ' · estimate' : ''}</span>
+                  {o.status === 'paid' ? (
+                    <div className="row-between small"><span>{o.payment ? `Paid ${money(o.payment.amount)} on ${formatDay(o.payment.paidOn, { day: 'numeric', month: 'short' })}` : 'Paid by autopay'}</span>{o.payment && <button type="button" className="btn btn-sm btn-ghost" onClick={() => unpay(o)}>Undo</button>}</div>
+                  ) : o.status === 'autopay' ? <span className="small">Autopay · {money(o.amount)}</span> : (
+                    <div className="pay-row">
+                      <label className="sr-only" htmlFor={`amt-${key(o)}`}>Amount paid for {o.bill.name}</label>
+                      <input id={`amt-${key(o)}`} className="amt" inputMode="decimal" value={amounts[key(o)] ?? o.bill.amount.toFixed(2)} onChange={(e) => setAmounts({ ...amounts, [key(o)]: e.target.value })} />
+                      <button type="button" className="btn btn-sm btn-primary" onClick={() => pay(o)}>Mark paid</button>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Bills ---------- */
+function Bills({ store, setStore, today }: Ctx) {
+  const [flash, setFlash] = useFlash();
+  const [cat, setCat] = useState('');
+  const rows = store.bills.filter((b) => !cat || b.category === cat);
+  const next = (b: Bill) => schedule([{ ...b, active: true }], store.payments, today, addMonths(today, 13), today)[0]?.due ?? '';
+  const columns: Column<Bill>[] = [
+    { key: 'name', label: 'Bill', sort: (b) => b.name, render: (b) => <><a href={`#/bill/${b.id}`}>{b.name}</a>{b.demo && <> <DemoTag /></>}<div className="small muted">{[b.payee, b.autopay && 'Autopay', b.variable && 'Varies', !b.active && 'Paused'].filter(Boolean).join(' · ')}</div></> },
+    { key: 'cat', label: 'Category', sort: (b) => b.category, render: (b) => b.category },
+    { key: 'rep', label: 'Repeats', render: (b) => repeatLabel(b.repeat) },
+    { key: 'next', label: 'Next due', sort: (b) => (b.active ? next(b) : ''), render: (b) => (b.active && next(b) ? formatDay(next(b), { day: 'numeric', month: 'short' }) : '—') },
+    { key: 'amt', label: 'Amount', num: true, sort: (b) => b.amount, render: (b) => money(b.amount) },
+    { key: 'year', label: 'Per year', num: true, sort: (b) => annualCost(b), render: (b) => money(annualCost(b)) },
+  ];
+  const table = useTable(rows, columns, { initialSort: 'next' });
+  return (
+    <div className="stack">
+      <PageHead eyebrow="Bills" title={<>What you <em>pay regularly.</em></>} actions={<a className="btn btn-primary" href="#/bill/new">Add bill</a>} />
+      {flash && <Notice kind={flash.kind} onDismiss={() => setFlash(null)}>{flash.text}</Notice>}
+      {store.bills.length === 0 ? (
+        <EmptyState title="No bills yet" actions={<><a className="btn btn-primary" href="#/bill/new">Add a bill</a><button type="button" className="btn" onClick={() => setStore(demoStore(today))}>Load demo bills</button></>}>Start with rent or your largest bill.</EmptyState>
+      ) : (
+        <div className="card stack">
+          <div className="filters"><Field label="Category">{(p) => <select {...p} value={cat} onChange={(e) => setCat(e.target.value)}><option value="">All categories</option>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select>}</Field></div>
+          <DataTable caption="Recurring bills" columns={columns} table={table} rowKey={(b) => b.id} empty="No bills in this category." />
+          <p className="small"><strong>Active bills per year: {money(round(store.bills.filter((b) => b.active).reduce((s, b) => s + annualCost(b), 0)))}</strong></p>
+          {store.bills.some((b) => b.demo) && <div><button type="button" className="btn btn-ghost btn-sm" onClick={() => { const ids = new Set(store.bills.filter((b) => b.demo).map((b) => b.id)); setStore({ bills: store.bills.filter((b) => !b.demo), payments: store.payments.filter((p) => !ids.has(p.billId)) }); setFlash({ kind: 'success', text: 'Demo bills removed.' }); }}>Clear demo bills</button></div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Editor({ store, setStore, today, navigate, id }: Ctx & { id?: string }) {
+  const ex = id ? store.bills.find((b) => b.id === id) : undefined;
+  const r = ex?.repeat;
+  const [d, setD] = useState<BillDraft>({
+    name: ex?.name ?? '', payee: ex?.payee ?? '', category: ex?.category ?? 'Utilities', amount: ex ? ex.amount.toFixed(2) : '', variable: ex?.variable ?? false, autopay: ex?.autopay ?? false,
+    kind: r?.kind ?? 'monthly', day: r && r.kind !== 'weekly' ? String(r.day) : String(Number(today.slice(8))), everyMonths: r?.kind === 'monthly' ? String(r.everyMonths) : '1', startMonth: r?.kind === 'monthly' ? r.startMonth : ymOf(today),
+    everyWeeks: r?.kind === 'weekly' ? String(r.everyWeeks) : '1', start: r?.kind === 'weekly' ? r.start : today, month: r?.kind === 'yearly' ? String(r.month) : String(Number(today.slice(5, 7))),
+  });
+  const [submitted, setSubmitted] = useState(false);
+  if (id && !ex) return <EmptyState title="Bill not found" actions={<a className="btn btn-primary" href="#/bills">Back to bills</a>} />;
+  const errors = submitted ? validateBill(d).errors : {};
+  const set = <K extends keyof BillDraft>(k: K, v: BillDraft[K]) => setD({ ...d, [k]: v });
+  const preview = validateBill(d).value;
+  function save(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitted(true);
+    const v = validateBill(d).value;
+    if (!v) return;
+    if (ex) setStore({ ...store, bills: store.bills.map((b) => (b.id === ex.id ? { ...ex, ...v, demo: false } : b)) });
+    else setStore({ ...store, bills: [...store.bills, { ...v, id: uid('bill'), active: true }] });
+    navigate('/bills');
+  }
+  return (
+    <div className="stack">
+      <PageHead eyebrow={ex ? 'Edit bill' : 'New bill'} title={ex ? <>Edit <em>{ex.name}</em></> : <>Add a <em>bill.</em></>} />
+      <form className="layout-main" onSubmit={save} noValidate>
+        <div className="card stack">
+          {Object.keys(errors).length > 0 && <Notice kind="error">Please fix the highlighted fields.</Notice>}
+          <div className="form-grid">
+            <Field label="Bill name" error={errors.name}>{(p) => <input {...p} value={d.name} onChange={(e) => set('name', e.target.value)} />}</Field>
+            <Field label="Paid to">{(p) => <input {...p} value={d.payee} onChange={(e) => set('payee', e.target.value)} />}</Field>
+            <Field label="Category">{(p) => <select {...p} value={d.category} onChange={(e) => set('category', e.target.value as Category)}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select>}</Field>
+            <Field label="Amount (USD)" hint={d.variable ? 'Your best estimate' : undefined} error={errors.amount}>{(p) => <input {...p} inputMode="decimal" value={d.amount} onChange={(e) => set('amount', e.target.value)} />}</Field>
+          </div>
+          <div className="row">
+            <label className="check"><input type="checkbox" checked={d.variable} onChange={(e) => set('variable', e.target.checked)} /> Amount varies</label>
+            <label className="check"><input type="checkbox" checked={d.autopay} onChange={(e) => set('autopay', e.target.checked)} /> Paid automatically</label>
+          </div>
+          <fieldset className="stack">
+            <legend className="label">Repeats</legend>
+            <div className="tabs" role="radiogroup" aria-label="Repeats">
+              {([['monthly', 'Monthly'], ['weekly', 'Weekly'], ['yearly', 'Yearly']] as const).map(([v, l]) => <button key={v} type="button" role="radio" aria-checked={d.kind === v} onClick={() => set('kind', v)}>{l}</button>)}
+            </div>
+            <div className="form-grid">
+              {d.kind === 'monthly' && <>
+                <Field label="Day of month" hint="31 = last day" error={errors.day}>{(p) => <input {...p} inputMode="numeric" value={d.day} onChange={(e) => set('day', e.target.value)} />}</Field>
+                <Field label="Every (months)" hint="3 = quarterly" error={errors.everyMonths}>{(p) => <input {...p} inputMode="numeric" value={d.everyMonths} onChange={(e) => set('everyMonths', e.target.value)} />}</Field>
+                <Field label="First month" error={errors.startMonth}>{(p) => <input {...p} type="month" value={d.startMonth} onChange={(e) => set('startMonth', e.target.value)} />}</Field>
+              </>}
+              {d.kind === 'weekly' && <>
+                <Field label="Every (weeks)" error={errors.everyWeeks}>{(p) => <input {...p} inputMode="numeric" value={d.everyWeeks} onChange={(e) => set('everyWeeks', e.target.value)} />}</Field>
+                <Field label="First due date" error={errors.start}>{(p) => <input {...p} type="date" value={d.start} onChange={(e) => set('start', e.target.value)} />}</Field>
+              </>}
+              {d.kind === 'yearly' && <>
+                <Field label="Month" error={errors.month}>{(p) => <select {...p} value={d.month} onChange={(e) => set('month', e.target.value)}>{Array.from({ length: 12 }, (_, i) => <option key={i} value={i + 1}>{monthName(`2000-${String(i + 1).padStart(2, '0')}`, { month: 'long' })}</option>)}</select>}</Field>
+                <Field label="Day" error={errors.day}>{(p) => <input {...p} inputMode="numeric" value={d.day} onChange={(e) => set('day', e.target.value)} />}</Field>
+              </>}
+            </div>
+          </fieldset>
+          <div className="row">
+            <button className="btn btn-primary" type="submit">{ex ? 'Save changes' : 'Save bill'}</button>
+            <a className="btn btn-ghost" href="#/bills">Cancel</a>
+            {ex && <button type="button" className="btn" onClick={() => { setStore({ ...store, bills: store.bills.map((b) => (b.id === ex.id ? { ...b, active: !b.active } : b)) }); navigate('/bills'); }}>{ex.active ? 'Pause bill' : 'Resume bill'}</button>}
+            {ex && <button type="button" className="btn btn-danger" onClick={() => { if (window.confirm(`Delete ${ex.name} and its payment history?`)) { setStore({ bills: store.bills.filter((b) => b.id !== ex.id), payments: store.payments.filter((p) => p.billId !== ex.id) }); navigate('/bills'); } }}>Delete</button>}
+          </div>
+        </div>
+        <aside className="card stack" aria-live="polite">
+          <p className="eyebrow">Preview</p>
+          {preview ? <>
+            <p className="display-num">{money(annualCost({ ...preview, id: 'p', active: true }))}<span className="small muted"> / year</span></p>
+            <p className="small">{repeatLabel(preview.repeat)}</p>
+            <p className="small muted">Next dates: {schedule([{ ...preview, id: 'p', active: true }], [], today, addMonths(today, 24), today).slice(0, 3).map((o) => formatDay(o.due, { day: 'numeric', month: 'short', year: 'numeric' })).join(', ')}</p>
+          </> : <p className="muted small">Fill in the name, amount and schedule to see the next dates.</p>}
+        </aside>
+      </form>
+    </div>
+  );
+}
+
+/* ---------- Year ahead ---------- */
+function Year({ store, today }: Ctx) {
+  const [tip, setTip] = useState<string | null>(null);
+  const months = Array.from({ length: 12 }, (_, i) => addMonths(`${ymOf(today)}-01`, i).slice(0, 7));
+  const data = months.map((m) => { const { from, to } = monthRange(m); const occ = schedule(store.bills, store.payments, from, to, today); return { m, total: monthSummary(occ).total, occ }; });
+  const max = Math.max(100, ...data.map((d) => d.total));
+  const nice = Math.ceil(max / 500) * 500;
+  const annual = store.bills.filter((b) => b.active).map((b) => ({ b, a: annualCost(b) })).sort((x, y) => y.a - x.a);
+  const amax = Math.max(1, ...annual.map((x) => x.a));
+  if (!store.bills.length) return <EmptyState title="No bills yet" actions={<a className="btn btn-primary" href="#/bill/new">Add a bill</a>} />;
+  return (
+    <div className="stack">
+      <PageHead eyebrow="Year ahead" title={<>The next <em>twelve months.</em></>} description={`${money(round(data.reduce((s, d) => s + d.total, 0)))} due between ${monthName(months[0], { month: 'short', year: 'numeric' })} and ${monthName(months[11], { month: 'short', year: 'numeric' })}.`} />
+      <section className="card stack" aria-labelledby="ym-title">
+        <h2 id="ym-title" className="h3">Due per month</h2>
+        <div className="bars-wrap" onMouseLeave={() => setTip(null)}>
+          <div className="bars-axis" aria-hidden="true">{[nice, nice / 2, 0].map((t) => <span key={t}>${t.toLocaleString()}</span>)}</div>
+          <div className="bars" role="img" aria-label={data.map((d) => `${monthName(d.m, { month: 'short' })} ${money(d.total)}`).join(', ')}>
+            {data.map((d, i) => {
+              const big = d.occ.filter((o) => o.amount >= 300 && o.bill.repeat.kind === 'yearly').map((o) => o.bill.name);
+              const text = `${monthName(d.m)}: ${money(d.total)}${big.length ? ` (includes ${big.join(', ')})` : ''}`;
+              return (
+                <div key={d.m} className="bar-col" style={{ ['--i' as string]: i }} tabIndex={0} aria-label={text} onMouseEnter={() => setTip(text)} onFocus={() => setTip(text)} onBlur={() => setTip(null)}>
+                  <div className="bar-stack" style={{ height: `${(d.total / nice) * 100}%` }}><span style={{ flexGrow: 1, background: big.length ? 'var(--warn)' : 'var(--accent)' }} /></div>
+                  <span className="bar-label mono">{monthName(d.m, { month: 'short' })}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <p className="small" aria-live="polite">{tip ?? 'Hover or focus a month for the exact total.'}</p>
+        <p className="legend"><span><i style={{ background: 'var(--accent)' }} />Regular month</span><span><i style={{ background: 'var(--warn)' }} />Includes a large yearly bill</span><span className="muted">· USD due per month</span></p>
+      </section>
+      <section className="card stack" aria-labelledby="ann-title">
+        <h2 id="ann-title" className="h3">Cost per year, by bill</h2>
+        <ul className="ann-list">
+          {annual.map(({ b, a }, i) => (
+            <li key={b.id} style={{ ['--i' as string]: i }}>
+              <span className="ann-name">{b.name}</span>
+              <span className="ann-track"><span style={{ width: `${(a / amax) * 100}%` }} /></span>
+              <span className="mono small">{money(a)}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+  );
+}
