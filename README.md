@@ -2,7 +2,7 @@
 
 A calendar of recurring bills — monthly, quarterly, every few weeks or yearly — with what’s paid, what’s left this month, what’s overdue, and what the year ahead will cost.
 
-**Live demo:** [https://dueboard.vercel.app/](https://dueboard.vercel.app/) — runs entirely in your browser; demo data is fictional and labelled.
+**Live demo:** [https://dueboard-calendar.vercel.app/](https://dueboard-calendar.vercel.app/) — runs entirely in your browser; demo data is fictional and labelled.
 
 ![Landing with this month’s bill calendar](docs/landing.png)
 
